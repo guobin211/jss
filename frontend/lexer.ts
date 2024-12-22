@@ -3,36 +3,23 @@
  */
 export enum TokenType {
     Number,
+    String,
     Identifier,
-    // let
-    Let,
-    // const
-    Const,
-    // fn
-    Fn,
-    // Grouping * Operators
-    BinaryOperator,
-    // ==
-    Equals,
-    // ,
-    Comma,
-    // .
-    Dot,
-    // :
-    Colon,
-    Semicolon,
-    // (
-    OpenParen,
-    // )
-    CloseParen,
-    // {
-    OpenBrace,
-    // }
-    CloseBrace,
-    // [
-    OpenBracket,
-    // ]
-    CloseBracket,
+    Let, // let
+    Const, // const
+    Fn, // fn
+    BinaryOperator, // Grouping * Operators
+    Equals, // ==
+    Comma, // ,
+    Dot, // .
+    Colon, // :
+    Semicolon, // ;
+    OpenParen, // (
+    CloseParen, // )
+    OpenBrace, // {
+    CloseBrace, // }
+    OpenBracket, // [
+    CloseBracket, // ]
     EOF,
 }
 
@@ -41,7 +28,23 @@ export interface Token {
     type: TokenType;
 }
 
-const KEYWORDS: Record<string, TokenType> = {
+const charMap: { [key: string]: TokenType } = {
+    "+": TokenType.BinaryOperator,
+    "-": TokenType.BinaryOperator,
+    "*": TokenType.BinaryOperator,
+    "/": TokenType.BinaryOperator,
+    "%": TokenType.BinaryOperator,
+    "=": TokenType.Equals,
+    "(": TokenType.OpenParen,
+    ")": TokenType.CloseParen,
+    "{": TokenType.OpenBrace,
+    "}": TokenType.CloseBrace,
+    "[": TokenType.OpenBracket,
+    "]": TokenType.CloseBracket,
+    ",": TokenType.Comma,
+    ".": TokenType.Dot,
+    ":": TokenType.Colon,
+    ";": TokenType.Semicolon,
     "let": TokenType.Let,
     "const": TokenType.Const,
     "fn": TokenType.Fn,
@@ -64,89 +67,105 @@ export function tokenize(source: string): Token[] {
             i++;
             continue;
         }
-        if (["+", "-", "*", "/", "%"].includes(char)) {
-            tokens.push(token(char, TokenType.BinaryOperator));
+        const tokenType = charMap[char];
+        if (tokenType) {
+            tokens.push(token(char, tokenType));
             i++;
             continue;
         }
-        if (char === "=") {
-            tokens.push(token(char, TokenType.Equals));
+        /**
+         * parse string
+         */
+        if (char === '"') {
+            let str = "";
             i++;
+            while (i < source.length && source[i] !== '"') {
+                if (source[i] === "\\") {
+                    i++;
+                    if (i < source.length) {
+                        const escapeChar = source[i];
+                        switch (escapeChar) {
+                            case "n":
+                                str += "\n";
+                                break;
+                            case "t":
+                                str += "\t";
+                                break;
+                            case "r":
+                                str += "\r";
+                                break;
+                            case '"':
+                                str += '"';
+                                break;
+                            case "\\":
+                                str += "\\";
+                                break;
+                            default:
+                                str += escapeChar;
+                        }
+                        i++;
+                        continue;
+                    } else {
+                        console.error(
+                            `Unterminated escape sequence at position ${i}`,
+                        );
+                        Deno.exit(1);
+                    }
+                }
+                str += source[i];
+                i++;
+            }
+            if (i >= source.length || source[i] !== '"') {
+                console.error(`Unterminated string literal at position ${i}`);
+                Deno.exit(1);
+            }
+            i++;
+            tokens.push(token(str, TokenType.String));
             continue;
         }
-        if (char === "(") {
-            tokens.push(token(char, TokenType.OpenParen));
-            i++;
-            continue;
-        }
-        if (char === ")") {
-            tokens.push(token(char, TokenType.CloseParen));
-            i++;
-            continue;
-        }
-        if (char === "{") {
-            tokens.push(token(char, TokenType.OpenBrace));
-            i++;
-            continue;
-        }
-        if (char === "}") {
-            tokens.push(token(char, TokenType.CloseBrace));
-            i++;
-            continue;
-        }
-        if (char === "[") {
-            tokens.push(token(char, TokenType.OpenBracket));
-            i++;
-            continue;
-        }
-        if (char === "]") {
-            tokens.push(token(char, TokenType.CloseBracket));
-            i++;
-            continue;
-        }
-        if (char === ",") {
-            tokens.push(token(char, TokenType.Comma));
-            i++;
-            continue;
-        }
-        if (char === ".") {
-            tokens.push(token(char, TokenType.Dot));
-            i++;
-            continue;
-        }
-        if (char === ":") {
-            tokens.push(token(char, TokenType.Colon));
-            i++;
-            continue;
-        }
-        if (char === ";") {
-            tokens.push(token(char, TokenType.Semicolon));
-            i++;
-            continue;
-        }
+        /**
+         * parse number 整数和浮点数
+         */
         if (char.match(/[0-9]/)) {
             let num = "";
-            while (source[i].match(/[0-9]/)) {
+            let dotCount = 0;
+            while (
+                i < source.length &&
+                (source[i].match(/[0-9]/) ||
+                    (source[i] === "." && dotCount < 1))
+            ) {
+                if (source[i] === ".") {
+                    dotCount++;
+                }
                 num += source[i];
                 i++;
+            }
+            if (dotCount > 1) {
+                console.error(`Invalid number format: ${num}`);
+                Deno.exit(1);
             }
             tokens.push(token(num, TokenType.Number));
             continue;
         }
+        /**
+         * parse identifier
+         */
         if (char.match(/[a-zA-Z]/)) {
             let id = "";
-            while (source[i].match(/[a-zA-Z]/)) {
+            while (i < source.length && source[i].match(/[a-zA-Z]/)) {
                 id += source[i];
                 i++;
             }
-            if (KEYWORDS[id]) {
-                tokens.push(token(id, KEYWORDS[id]));
+            if (charMap[id]) {
+                tokens.push(token(id, charMap[id]));
             } else {
                 tokens.push(token(id, TokenType.Identifier));
             }
             continue;
         }
-        throw new Error(`Unexpected character: ['${char}']`);
+        console.error(`Unexpected character: ['${char}']`);
+        Deno.exit(1);
     }
+    tokens.push({ type: TokenType.EOF, value: "EndOfFile" });
     return tokens;
 }
